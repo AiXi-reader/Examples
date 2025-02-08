@@ -1,0 +1,97 @@
+% 参数设置
+T = 1; % 时间范围
+N = 10000; % 离散时间步数
+dt = T/N; % 时间步长
+t = linspace(0, T, N); % 时间向量
+
+M = 100; % 采样轨道数（样本数）
+
+% 初始条件
+u0 = [1; 2]; % 初始状态 u
+v0 = [3; 4]; % 初始状态 v
+z0 = [2; 3]; % 初始状态 z
+
+% 选择 kappa 值
+kappa_values = [0, 100, 500, 1000]; % 选择多个 kappa 进行比较
+num_kappa = length(kappa_values);
+
+% 创建解矩阵
+U = zeros(2, N, M);
+V = zeros(2, N, M);
+Z = zeros(2, N, M);
+
+% 设置初始条件
+U(:,1,:) = repmat(u0, 1, M); 
+V(:,1,:) = repmat(v0, 1, M);
+Z(:,1,:) = repmat(z0, 1, M); 
+
+% 计算均方误差的存储
+E_squared_diff_u_t = zeros(N, num_kappa);
+E_squared_diff_v_t = zeros(N, num_kappa);
+
+% 迭代不同的 kappa
+for j = 1:num_kappa
+    kappa = kappa_values(j);
+
+    % 多轨道仿真
+    for m = 1:M
+        for i = 1:N-1
+            % 生成随机噪声
+            dW1 = sqrt(dt) * randn; 
+            dW2 = sqrt(dt) * randn; 
+
+            % 计算噪声项的系数
+            sigma_u1 = sqrt(U(1,i,m)^2 + 3);
+            sigma_u2 = sqrt(U(2,i,m)^2 + 3);
+            sigma_v1 = sqrt(V(1,i,m)^2 + 4);
+            sigma_v2 = sqrt(V(2,i,m)^2 + 4);
+
+            % 系统 u 的方程
+            f_u1 = -U(1,i,m) - U(2,i,m) + sqrt(U(1,i,m)^2 + 1) - 10*U(1,i,m) - kappa*(U(1,i,m) - V(1,i,m));
+            f_u2 = U(1,i,m) - U(2,i,m) + sqrt(U(2,i,m)^2 + 1) - 10*U(2,i,m) - kappa*(U(2,i,m) - V(2,i,m));
+
+            % 系统 v 的方程
+            f_v1 = -V(1,i,m) - V(2,i,m) + sqrt(V(1,i,m)^2 + 2) - 10*V(1,i,m) - kappa*(V(1,i,m) - U(1,i,m));
+            f_v2 = V(1,i,m) - V(2,i,m) + sqrt(V(2,i,m)^2 + 2) - 10*V(2,i,m) - kappa*(V(2,i,m) - U(2,i,m));
+
+            % 系统 z 的方程
+            f_z1 = -Z(1,i,m) - Z(2,i,m) + 0.5*sqrt(Z(1,i,m)^2 + 1) + 0.5*sqrt(Z(1,i,m)^2 + 2) - 10*Z(1,i,m);
+            f_z2 = Z(1,i,m) - Z(2,i,m) + 0.5*sqrt(Z(2,i,m)^2 + 1) + 0.5*sqrt(Z(2,i,m)^2 + 2) - 10*Z(2,i,m);
+
+            % 计算下一个时间步的状态
+            U(:,i+1,m) = U(:,i,m) + dt * [f_u1; f_u2] + [sigma_u1; sigma_u2] * dW1;
+            V(:,i+1,m) = V(:,i,m) + dt * [f_v1; f_v2] + [sigma_v1; sigma_v2] * dW2;
+            Z(:,i+1,m) = Z(:,i,m) + dt * [f_z1; f_z2] + 0.5 * [sqrt(Z(1,i,m)^2 + 3); sqrt(Z(2,i,m)^2 + 3)] * dW1 + 0.5 * [sqrt(Z(2,i,m)^2 + 4); sqrt(Z(2,i,m)^2 + 4)] * dW2;
+        end
+    end
+
+    % 计算均方误差（对所有样本取均值）
+    for i = 1:N
+        E_squared_diff_u_t(i, j) = mean(sum((U(:, i, :) - Z(:, i, :)).^2, 1), 3);
+        E_squared_diff_v_t(i, j) = mean(sum((V(:, i, :) - Z(:, i, :)).^2, 1), 3);
+    end
+end
+
+%% **绘制 u 和 z 的均方误差**
+figure;
+for j = 1:num_kappa
+    subplot(2,2,j);
+    plot(t, E_squared_diff_u_t(:, j), 'b', 'LineWidth', 1.5);
+    title(sprintf('\\kappa = %d', kappa_values(j)));
+    xlabel('Time');
+    ylabel('Mean Square Error','Interpreter','latex');
+    grid on;
+end
+sgtitle('Mean Square Error Evolution: $E\|u(t) - z(t)\|^2$','Interpreter','latex');
+
+%% **绘制 v 和 z 的均方误差**
+figure;
+for j = 1:num_kappa
+    subplot(2,2,j);
+    plot(t, E_squared_diff_v_t(:, j), 'r', 'LineWidth', 1.5);
+    title(sprintf('\\kappa = %d', kappa_values(j)));
+    xlabel('Time');
+    ylabel('Mean Square Error','Interpreter','latex');
+    grid on;
+end
+sgtitle('Mean Square Error Evolution: $E\|v(t) - z(t)\|^2$','Interpreter','latex');
