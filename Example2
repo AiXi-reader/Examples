@@ -1,0 +1,87 @@
+% 参数设置
+T = 1; % 时间范围
+N = 10000; % 离散时间步数
+dt = T/N; % 时间步长
+t = linspace(0, T, N); % 时间向量
+
+% 初始条件
+u0 = 1; 
+v0 = 2; 
+z0 = 1.5; % 假设 z 的初始条件
+
+% 系统参数
+gamma = 3;
+a = 1;
+g = 0.1;
+b = 0.5;
+
+% 选择不同的 kappa 值
+kappa_values = [0, 500, 1000, 5000]; 
+num_kappa = length(kappa_values);
+
+% 计算均方误差
+figure;
+for j = 1:num_kappa
+    kappa = kappa_values(j);
+
+    % 预分配解矩阵
+    U = zeros(1, N); % u 轨迹
+    V = zeros(1, N); % v 轨迹
+    Z = zeros(1, N); % z 轨迹
+
+    % 设置初始条件
+    U(1) = u0;
+    V(1) = v0;
+    Z(1) = z0;
+
+    % 计算均方误差
+    E_u_t = zeros(N, 1);
+    E_v_t = zeros(N, 1);
+
+    % 使用 Euler–Maruyama 方法求解
+    for i = 1:N-1
+        % 生成随机噪声
+        dW1 = sqrt(dt) * randn; 
+        dW2 = sqrt(dt) * randn; 
+
+        % 计算系统动力学
+        f_u = -gamma * U(i) - kappa * (U(i) - V(i)) - a * sin(U(i)) + g;
+        f_v = -gamma * V(i) - kappa * (V(i) - U(i)) - a * sin(V(i)) + g;
+        f_z = -gamma * Z(i) - a * sin(Z(i)) + g;
+
+        % 计算下一个时间步的状态
+        U(i+1) = U(i) + dt * f_u + b * sin(U(i)) * dW1;
+        V(i+1) = V(i) + dt * f_v + b * sin(V(i)) * dW2;
+        Z(i+1) = Z(i) + dt * f_z + 0.5 * b * (sin(Z(i)) * dW1 + sin(Z(i)) * dW2);
+    end
+
+    % 计算均方误差
+    for i = 1:N
+        E_u_t(i) = mean((U(1:i) - Z(1:i)).^2);
+        E_v_t(i) = mean((V(1:i) - Z(1:i)).^2);
+    end
+
+    % 绘制 u-z 误差图
+    figure(1);
+    subplot(2,2,j);
+    plot(t, E_u_t, 'b', 'LineWidth', 1.5); 
+    title(sprintf('\\kappa = %d', kappa));
+    xlabel('Time');
+    ylabel('Mean Squared Error');
+    grid on;
+
+    % 绘制 v-z 误差图
+    figure(2);
+    subplot(2,2,j);
+    plot(t, E_v_t, 'r', 'LineWidth', 1.5); 
+    title(sprintf('\\kappa = %d', kappa));
+    xlabel('Time');
+    ylabel('Mean Squared Error');
+    grid on;
+end
+
+% 设置总标题
+figure(1);
+sgtitle('Evolution of Mean Squared Error: $E\|u(t) - z(t)\|^2$','Interpreter','latex');
+figure(2);
+sgtitle('Evolution of Mean Squared Error: $E\|v(t) - z(t)\|^2$','Interpreter','latex');
